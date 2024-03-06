@@ -28,8 +28,6 @@ function evaluate(expr)
         elseif expr.head == :||
             args = map(evaluate, expr.args[1:end])
             return args[1] || args[2]
-        elseif expr.head == :if
-
         end
     end
 end
