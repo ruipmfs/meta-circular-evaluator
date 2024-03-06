@@ -1,7 +1,5 @@
 # A Meta-Circular Evaluator for Julia
 
-## António Menezes Leitão
-
 ## March, 2024
 
 ## 1 Introduction
