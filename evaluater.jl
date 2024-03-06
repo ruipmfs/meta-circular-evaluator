@@ -30,9 +30,11 @@ function eval(exp)
     elseif is_block(exp)
         eval(exp.args[length(exp.args)])
     elseif is_comparison(exp)
+        result = []
         for i in 1:2:length(exp.args) - 2
-            eval(Expr(:call, :(exp.args[i+1]), exp.args[i], exp.args[i+2]))
+            push!(result, eval(Expr(:call, exp.args[i+1], exp.args[i], exp.args[i+2])))
         end
+        reduce(&, result)
     else
         "Unknown expression type -- EVAL"
     end
