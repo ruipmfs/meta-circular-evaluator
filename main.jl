@@ -1,5 +1,5 @@
 function metajulia_repl()
-    println(">> ")
+    print(">> ")
     input = readline()
     parsed = Meta.parse(input)
     println(evaluate(parsed))
@@ -15,8 +15,12 @@ function evaluate(expr)
             args = map(evaluate, expr.args[2:end])
             if symb == :+
                 return sum(args)
+            elseif symb == :-
+                return foldl(-, args)
             elseif symb == :*
                 return prod(args)
+            elseif symb == :/
+                return foldl(/, args)
             elseif symb == :>
                 return args[1] > args[2]
             elseif symb == :<
@@ -39,6 +43,9 @@ function evaluate(expr)
                 end
             end
             return evaluate(expr.args[length(expr.args)])
+        elseif expr.head == :block
+            args = map(evaluate, expr.args[1:end])
+            return args[end]
         end
     end
 end
