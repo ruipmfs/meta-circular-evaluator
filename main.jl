@@ -28,6 +28,17 @@ function evaluate(expr)
         elseif expr.head == :||
             args = map(evaluate, expr.args[1:end])
             return args[1] || args[2]
+        elseif expr.head == :if
+            i = 1
+            while i < length(expr.args)
+                condition = evaluate(expr.args[i])
+                if condition
+                    return expr.args[i+1]
+                else
+                    i += 2
+                end
+            end
+            return evaluate(expr.args[length(expr.args)])
         end
     end
 end
