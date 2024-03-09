@@ -46,43 +46,53 @@ function handleLet(expr)
     return evaluate(expr.args[end])
 end
 
+function handle_standard_operations(symb, args)
+    if symb == :+
+        return sum(args)
+    elseif symb == :-
+        return foldl(-, args)
+    elseif symb == :*
+        return prod(args)
+    elseif symb == :/
+        return foldl(/, args)
+    elseif symb == :>
+        return args[1] > args[2]
+    elseif symb == :<
+        return args[1] < args[2]
+    end
+end
+
+function handle_non_call_expressions(expr)
+    if expr.head == :&&
+        args = map(evaluate, expr.args[1:end])
+        return args[1] && args[2]
+    elseif expr.head == :||
+        args = map(evaluate, expr.args[1:end])
+        return args[1] || args[2]
+    elseif expr.head == :comparison
+        handleComparison(expr)
+    elseif expr.head == :if || expr.head == :elseif
+        handleIf(expr)
+    elseif expr.head == :block
+        args = map(evaluate, expr.args[1:end])
+        return args[end]
+    elseif expr.head == :let
+        return handleLet(expr)
+    end
+end
+
 function evaluate(expr)
     if isa(expr, Number) || isa(expr, String)
         return expr
     elseif isa(expr, Symbol)
-        get(global_scope, expr, nothing)
+        return get(global_scope, expr, nothing)
     elseif isa(expr, Expr)
         if expr.head == :call
             symb = expr.args[1]
             args = map(evaluate, expr.args[2:end])
-            if symb == :+
-                return sum(args)
-            elseif symb == :-
-                return foldl(-, args)
-            elseif symb == :*
-                return prod(args)
-            elseif symb == :/
-                return foldl(/, args)
-            elseif symb == :>
-                return args[1] > args[2]
-            elseif symb == :<
-                return args[1] < args[2]
-            end
-        elseif expr.head == :&&
-            args = map(evaluate, expr.args[1:end])
-            return args[1] && args[2]
-        elseif expr.head == :||
-            args = map(evaluate, expr.args[1:end])
-            return args[1] || args[2]
-        elseif expr.head == :comparison
-            handleComparison(expr)
-        elseif expr.head == :if || expr.head == :elseif
-            handleIf(expr)
-        elseif expr.head == :block
-            args = map(evaluate, expr.args[1:end])
-            return args[end]
-        elseif expr.head == :let
-            return handleLet(expr)
+            return handle_standard_operations(symb, args)
+        else
+            return handle_non_call_expressions(expr)
         end
     end
 end
