@@ -3,10 +3,15 @@ function metajulia_repl()
     input = readline()
     parsed = Meta.parse(input)
     println(evaluate(parsed))
+    empty!(temporary_global_scope)
+    empty!(temporary_function_global_scope)
     metajulia_repl()
 end
 
-global_scope = Dict{Symbol, Any}()
+global_scope = Dict{Symbol,Any}()
+function_global_scope = Dict{Symbol,Array{Any,1}}()
+temporary_function_global_scope = Dict{Symbol,Array{Any,1}}()
+temporary_global_scope = Dict{Symbol,Any}()
 
 function handleIf(expr)
     i = 1
@@ -34,19 +39,47 @@ function handleComparison(expr)
 end
 
 function handleLet(expr)
-    if isa(expr.args[1].args[1], Expr)
-        i = 1
-        while i <= length(expr.args[1].args)
-            global_scope[expr.args[1].args[i].args[1]] = expr.args[1].args[i].args[2]
-            i += 1
-        end 
-    else
-        global_scope[expr.args[1].args[1]] = expr.args[1].args[2]
+    global environmentFlag = 0
+    i = 1
+    environmentFlag = 1
+    while i < length(expr.args)
+        evaluate(expr.args[1])
+        i += 1
     end
-    return evaluate(expr.args[end])
+    result = evaluate(expr.args[i])
+    environmentFlag = 0
+    return result
 end
 
-function handle_standard_operations(symb, args)
+function handleAssociation(expr)
+    if isa(expr.args[1], Symbol)
+        if environmentFlag == 1
+            temporary_global_scope[expr.args[1]] = evaluate(expr.args[2])
+        else
+            global_scope[expr.args[1]] = evaluate(expr.args[2])
+            return evaluate(expr.args[2])
+        end
+    else
+        i = 2
+        if environmentFlag == 1
+            temporary_function_global_scope[expr.args[1].args[1]] = [expr.args[2]]
+            while i <= length(expr.args[1].args)     
+                push!(temporary_function_global_scope[expr.args[1].args[1]], expr.args[1].args[i])
+                i += 1
+            end
+        else
+            function_global_scope[expr.args[1].args[1]] = [expr.args[2]]
+            while i <= length(expr.args[1].args)
+                push!(function_global_scope[expr.args[1].args[1]], expr.args[1].args[i])
+                i += 1
+            end
+            return evaluate("<function>")
+        end
+    end
+end
+
+
+function handleStandardOperations(symb, args)
     if symb == :+
         return sum(args)
     elseif symb == :-
@@ -62,7 +95,7 @@ function handle_standard_operations(symb, args)
     end
 end
 
-function handle_non_call_expressions(expr)
+function handleNonCallExpressions(expr)
     if expr.head == :&&
         args = map(evaluate, expr.args[1:end])
         return args[1] && args[2]
@@ -70,29 +103,62 @@ function handle_non_call_expressions(expr)
         args = map(evaluate, expr.args[1:end])
         return args[1] || args[2]
     elseif expr.head == :comparison
-        handleComparison(expr)
+        return handleComparison(expr)
     elseif expr.head == :if || expr.head == :elseif
-        handleIf(expr)
+        return handleIf(expr)
     elseif expr.head == :block
-        args = map(evaluate, expr.args[1:end])
-        return args[end]
+        if length(expr.args) >=1
+            args = map(evaluate, expr.args[1:end])
+            return args[end]
+        else
+            return
+        end
     elseif expr.head == :let
         return handleLet(expr)
+    elseif expr.head == :(=)
+        return handleAssociation(expr)
     end
+end
+
+function handleCallFunctions(expr)
+    i = 2
+    while i <= length(expr.args)
+        args = evaluate(expr.args[i])
+        if environmentFlag == 1
+            key = temporary_function_global_scope[expr.args[1]][i]
+        else
+            key = function_global_scope[expr.args[1]][i]
+        end
+        temporary_global_scope[key] = args
+        i += 1
+    end
+    return evaluate(expr.args[1])
 end
 
 function evaluate(expr)
     if isa(expr, Number) || isa(expr, String)
         return expr
     elseif isa(expr, Symbol)
-        return get(global_scope, expr, nothing)
+        if haskey(global_scope, expr)
+            return evaluate(get(global_scope, expr, nothing))
+        elseif haskey(temporary_global_scope, expr)
+            return evaluate(get(temporary_global_scope, expr, nothing))
+        elseif haskey(function_global_scope, expr)
+            return evaluate(get(function_global_scope, expr, nothing)[1])
+        else
+            return evaluate(get(temporary_function_global_scope, expr, nothing)[1])
+        end
     elseif isa(expr, Expr)
         if expr.head == :call
             symb = expr.args[1]
-            args = map(evaluate, expr.args[2:end])
-            return handle_standard_operations(symb, args)
+            if haskey(function_global_scope, symb) || haskey(temporary_function_global_scope, symb)
+                return handleCallFunctions(expr)
+            else
+                args = map(evaluate, expr.args[2:end])
+                return handleStandardOperations(symb, args)
+            end
         else
-            return handle_non_call_expressions(expr)
+            return handleNonCallExpressions(expr)
         end
     end
 end
