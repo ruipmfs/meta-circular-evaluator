@@ -8,6 +8,16 @@ function metajulia_repl()
             break
         end
         parsed = Meta.parse(input)
+        incomplete_input = input
+        while parsed.head == :incomplete 
+            print(">> ")
+            next_input = readline()
+            incomplete_input *= next_input
+            parsed = Meta.parse(incomplete_input)
+            if parsed.head != :incomplete
+                println(parsed)
+            end
+        end
         println(evaluate(parsed))
         empty!(temporary_global_scope)
         empty!(let_function_global_scope)
