@@ -17,23 +17,22 @@ end
 
 global_scope = Dict{Symbol,Any}()
 function_global_scope = Dict{Symbol,Array{Any,1}}()
-temporary_global_scope = Dict{Symbol,Any}()
+temporary_global_scope = Array{Dict{Symbol,Any}, 1}()
 let_function_global_scope = Dict{Symbol,Array{Any,1}}()
 let_global_scope = Dict{Symbol,Any}()
 global environmentFlag = 0
 
 function handleIf(expr)
     i = 1
-    args = map(evaluate, expr.args[1:end])
-    while i < length(args)
-        condition = evaluate(args[1])
+    while i < length(expr.args)
+        condition = evaluate(expr.args[i])
         if condition
-            return args[2]
+            return evaluate(expr.args[i+1])
         else
             i += 2
         end
     end
-    return map(evaluate, args[end])
+    return evaluate(expr.args[end])
 end
 
 function handleComparison(expr)
@@ -131,33 +130,38 @@ end
 
 function handleCallFunctions(expr)
     i = 2
-    function_ids = []
+    j = 2
+    auxiliar_funcs = []
     while i <= length(expr.args)
+        dict = Dict{Symbol,Any}()
         if haskey(function_global_scope, expr.args[i])
-            push!(function_ids, i) 
+            key = function_global_scope[expr.args[1]][i]
+            args = expr.args[i]
+            key_args = function_global_scope[args]
+            push!(auxiliar_funcs, key)
+            function_global_scope[key] = key_args
         else
             args = evaluate(expr.args[i])
-            if environmentFlag == 1
-                key = let_function_global_scope[expr.args[1]][i]
-                let_global_scope[key] = args
-            else
-                key = function_global_scope[expr.args[1]][i]
-                temporary_global_scope[key] = args
-            end
+        end
+        if environmentFlag == 1
+            key = let_function_global_scope[expr.args[1]][i]
+            let_global_scope[key] = args
+        else
+            key = function_global_scope[expr.args[1]][i]
+            dict[key] = args
+            push!(temporary_global_scope, dict)
         end
         i += 1
     end
-    for id in function_ids
-        args = evaluate(expr.args[id])
-        if environmentFlag == 1
-            key = let_function_global_scope[expr.args[1]][id]
-            let_global_scope[key] = args
-        else
-            key = function_global_scope[expr.args[1]][id]
-            temporary_global_scope[key] = args
-        end
+    result = evaluate(expr.args[1])
+    while j <= length(expr.args)
+        pop!(temporary_global_scope)
+        j += 1
     end
-    return evaluate(expr.args[1])
+    for key in auxiliar_funcs
+        delete!(function_global_scope, key)
+    end
+    return result
 end
 
 function evaluate(expr)
@@ -171,9 +175,14 @@ function evaluate(expr)
                 return evaluate(get(let_function_global_scope, expr, nothing)[1])
             end
         else
-            if haskey(temporary_global_scope, expr)
-                return evaluate(get(temporary_global_scope, expr, nothing))
-            elseif haskey(global_scope, expr)
+            for dict in reverse(temporary_global_scope)
+                if haskey(dict, expr) && haskey(function_global_scope, expr)
+                    return evaluate(get(function_global_scope, expr, nothing)[1])
+                elseif haskey(dict, expr)
+                    return evaluate(get(dict, expr, nothing))
+                end
+            end
+            if haskey(global_scope, expr)
                 return evaluate(get(global_scope, expr, nothing))
             elseif haskey(function_global_scope, expr)
                 return evaluate(get(function_global_scope, expr, nothing)[1])
