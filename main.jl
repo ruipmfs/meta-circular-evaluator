@@ -24,8 +24,14 @@ function metajulia_repl()
                 end
                 parsed = Meta.parse(incomplete_input)
             end
-            result = eval(parsed)
-            println(result)
+            # Check if the input is a function definition.
+            if isa(parsed, Expr) && parsed.head == :(=) && isa(parsed.args[1], Expr) && parsed.args[1].head == :call
+                println("<function>")
+            else
+                # Normal evaluation and printing of the result.
+                result = eval(parsed)
+                println(result)
+            end
         catch e
             println("Error: ", e)
         end
