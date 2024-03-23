@@ -3,27 +3,46 @@ function metajulia_repl()
         print(">> ")
         input = readline()
         if input == "exit"
+            # Assuming empty! functions are defined elsewhere to clean your scopes
             empty!(global_scope)
             empty!(function_global_scope)
             break
         end
-        parsed = Meta.parse(input)
-        incomplete_input = input
-        while parsed.head == :incomplete 
-            print(">> ")
-            next_input = readline()
-            incomplete_input *= next_input
-            parsed = Meta.parse(incomplete_input)
-            if parsed.head != :incomplete
-                println(parsed)
+        try
+            parsed = Meta.parse(input)
+            incomplete_input = input
+            # Initialize a counter for opened and closed blocks
+            block_depth = 0
+            if isa(parsed, Expr)
+                block_depth += count_occurrences(input, "begin") + count_occurrences(input, "if") + count_occurrences(input, "for") + count_occurrences(input, "while") + count_occurrences(input, "function")
+                block_depth -= count_occurrences(input, "end")
             end
+            while isa(parsed, Expr) && (parsed.head == :incomplete || block_depth > 0)
+                next_input = readline()
+                incomplete_input *= "\n" * next_input
+                if isa(parsed, Expr)
+                    block_depth += count_occurrences(next_input, "begin") + count_occurrences(next_input, "if") + count_occurrences(next_input, "for") + count_occurrences(next_input, "while") + count_occurrences(next_input, "function")
+                    block_depth -= count_occurrences(next_input, "end")
+                end
+                parsed = Meta.parse(incomplete_input)
+            end
+            # Evaluate parsed expression or literal
+            result = eval(parsed)  # Be cautious with `eval` for arbitrary input
+            println(result)
+        catch e
+            println("Error: ", e)
         end
-        println(evaluate(parsed))
         empty!(temporary_global_scope)
         empty!(let_function_global_scope)
         empty!(let_global_scope)
     end
 end
+
+function count_occurrences(input_string, substring)
+    return count(occursin(substring), split(input_string, "\n"))
+end
+
+
 
 global_scope = Dict{Symbol,Any}()
 function_global_scope = Dict{Symbol,Array{Any,1}}()
