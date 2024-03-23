@@ -7,12 +7,36 @@ function metajulia_repl()
             empty!(function_global_scope)
             break
         end
-        parsed = Meta.parse(input)
-        println(evaluate(parsed))
+        try
+            parsed = Meta.parse(input)
+            incomplete_input = input
+            block_depth = 0
+            if isa(parsed, Expr)
+                block_depth += count_occurrences(input, "begin") + count_occurrences(input, "if") + count_occurrences(input, "for") + count_occurrences(input, "while") + count_occurrences(input, "function")
+                block_depth -= count_occurrences(input, "end")
+            end
+            while isa(parsed, Expr) && (parsed.head == :incomplete || block_depth > 0)
+                next_input = readline()
+                incomplete_input *= "\n" * next_input
+                if isa(parsed, Expr)
+                    block_depth += count_occurrences(next_input, "begin") + count_occurrences(next_input, "if") + count_occurrences(next_input, "for") + count_occurrences(next_input, "while") + count_occurrences(next_input, "function")
+                    block_depth -= count_occurrences(next_input, "end")
+                end
+                parsed = Meta.parse(incomplete_input)
+            end
+            result = eval(parsed)
+            println(result)
+        catch e
+            println("Error: ", e)
+        end
         empty!(temporary_global_scope)
         empty!(let_function_global_scope)
         empty!(let_global_scope)
     end
+end
+
+function count_occurrences(input_string, substring)
+    return count(occursin(substring), split(input_string, "\n"))
 end
 
 global_scope = Dict{Symbol,Any}()
@@ -86,6 +110,17 @@ function handleAssociation(expr)
     end
 end
 
+function handleQuote(expr)
+    if isa(expr, Expr)
+        if expr.head == :$
+            return evaluate(expr.args[1])
+        else
+            return Expr(expr.head, map(handleQuote, expr.args)...)
+        end
+    else
+        return expr
+    end
+end
 
 function handleStandardOperations(symb, args)
     if symb == :+
@@ -125,6 +160,8 @@ function handleNonCallExpressions(expr)
         return handleLet(expr)
     elseif expr.head == :(=)
         return handleAssociation(expr)
+    elseif expr.head == :quote
+        return handleQuote(expr.args[1])
     end
 end
 
@@ -200,5 +237,7 @@ function evaluate(expr)
         else
             return handleNonCallExpressions(expr)
         end
+    elseif isa(expr, QuoteNode)
+        return expr.value
     end
 end
