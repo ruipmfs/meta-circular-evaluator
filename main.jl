@@ -3,7 +3,6 @@ function metajulia_repl()
         print(">> ")
         input = readline()
         if input == "exit"
-            # Assuming empty! functions are defined elsewhere to clean your scopes
             empty!(global_scope)
             empty!(function_global_scope)
             break
