@@ -167,7 +167,7 @@ function handleNonCallExpressions(expr)
     elseif expr.head == :(=)
         return handleAssociation(expr)
     elseif expr.head == :quote
-        return handleQuote(expr.args[1])
+        return Expr(:quote, handleQuote(expr.args[1]))
     end
 end
 
@@ -244,6 +244,6 @@ function evaluate(expr)
             return handleNonCallExpressions(expr)
         end
     elseif isa(expr, QuoteNode)
-        return expr.value
+        return expr
     end
 end
