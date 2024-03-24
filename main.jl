@@ -7,7 +7,7 @@ function metajulia_repl()
             empty!(function_global_scope)
             break
         end
-        try
+        #try
             parsed = Meta.parse(input)
             incomplete_input = input
             block_depth = 0
@@ -24,11 +24,11 @@ function metajulia_repl()
                 end
                 parsed = Meta.parse(incomplete_input)
             end
-            result = eval(parsed)
+            result = evaluate(parsed)
             println(result)
-        catch e
+        #=catch e
             println("Error: ", e)
-        end
+        end=#
         empty!(temporary_global_scope)
         empty!(let_function_global_scope)
         empty!(let_global_scope)
@@ -105,7 +105,8 @@ function handleAssociation(expr)
                 push!(function_global_scope[expr.args[1].args[1]], expr.args[1].args[i])
                 i += 1
             end
-            return evaluate("<function>")
+            println("<function>")
+            return
         end
     end
 end
@@ -191,9 +192,11 @@ function handleCallFunctions(expr)
         i += 1
     end
     result = evaluate(expr.args[1])
-    while j <= length(expr.args)
-        pop!(temporary_global_scope)
-        j += 1
+    if environmentFlag == 0
+        while j <= length(expr.args)
+            pop!(temporary_global_scope)
+            j += 1
+        end
     end
     for key in auxiliar_funcs
         delete!(function_global_scope, key)
