@@ -8,24 +8,24 @@ function metajulia_repl()
             break
         end
         #try
-            parsed = Meta.parse(input)
-            incomplete_input = input
-            block_depth = 0
+        parsed = Meta.parse(input)
+        incomplete_input = input
+        block_depth = 0
+        if isa(parsed, Expr)
+            block_depth += count_occurrences(input, "begin") + count_occurrences(input, "if") + count_occurrences(input, "for") + count_occurrences(input, "while") + count_occurrences(input, "function")
+            block_depth -= count_occurrences(input, "end")
+        end
+        while isa(parsed, Expr) && (parsed.head == :incomplete || block_depth > 0)
+            next_input = readline()
+            incomplete_input *= "\n" * next_input
             if isa(parsed, Expr)
-                block_depth += count_occurrences(input, "begin") + count_occurrences(input, "if") + count_occurrences(input, "for") + count_occurrences(input, "while") + count_occurrences(input, "function")
-                block_depth -= count_occurrences(input, "end")
+                block_depth += count_occurrences(next_input, "begin") + count_occurrences(next_input, "if") + count_occurrences(next_input, "for") + count_occurrences(next_input, "while") + count_occurrences(next_input, "function")
+                block_depth -= count_occurrences(next_input, "end")
             end
-            while isa(parsed, Expr) && (parsed.head == :incomplete || block_depth > 0)
-                next_input = readline()
-                incomplete_input *= "\n" * next_input
-                if isa(parsed, Expr)
-                    block_depth += count_occurrences(next_input, "begin") + count_occurrences(next_input, "if") + count_occurrences(next_input, "for") + count_occurrences(next_input, "while") + count_occurrences(next_input, "function")
-                    block_depth -= count_occurrences(next_input, "end")
-                end
-                parsed = Meta.parse(incomplete_input)
-            end
-            result = evaluate(parsed)
-            println(result)
+            parsed = Meta.parse(incomplete_input)
+        end
+        result = evaluate(parsed)
+        println(result)
         #=catch e
             println("Error: ", e)
         end=#
@@ -41,7 +41,7 @@ end
 
 global_scope = Dict{Symbol,Any}()
 function_global_scope = Dict{Symbol,Array{Any,1}}()
-temporary_global_scope = Array{Dict{Symbol,Any}, 1}()
+temporary_global_scope = Array{Dict{Symbol,Any},1}()
 let_function_global_scope = Dict{Symbol,Array{Any,1}}()
 let_global_scope = Dict{Symbol,Any}()
 global environmentFlag = 0
@@ -75,7 +75,7 @@ function handleLet(expr)
     i = 1
     environmentFlag = 1
     while i < length(expr.args)
-        evaluate(expr.args[1])
+        evaluate(expr.args[i])
         i += 1
     end
     result = evaluate(expr.args[i])
@@ -105,8 +105,7 @@ function handleAssociation(expr)
                 push!(function_global_scope[expr.args[1].args[1]], expr.args[1].args[i])
                 i += 1
             end
-            println("<function>")
-            return
+            return ("<function>")
         end
     end
 end
