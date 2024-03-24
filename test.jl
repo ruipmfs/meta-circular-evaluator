@@ -1,7 +1,7 @@
 
 import Test.@testset
 import Test.@test
-
+include("main.jl")
 """
 This macro was copied from Suppressor.jl
 
