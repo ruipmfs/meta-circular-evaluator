@@ -5,6 +5,8 @@ function metajulia_repl()
         if input == "exit"
             empty!(global_scope)
             empty!(function_global_scope)
+            empty!(let_function_global_scope)
+            empty!(let_global_scope)
             break
         end
         #try
@@ -25,13 +27,14 @@ function metajulia_repl()
             parsed = Meta.parse(incomplete_input)
         end
         result = evaluate(parsed)
+        if isa(result, String)
+            println("""$result""")
+        end
         println(result)
         #=catch e
             println("Error: ", e)
         end=#
         empty!(temporary_global_scope)
-        empty!(let_function_global_scope)
-        empty!(let_global_scope)
     end
 end
 
@@ -234,7 +237,6 @@ function handleAnonymousFunctions(expr)
         callArgs = map(evaluate, expr.args[2:end])
         params = params.args
     end
-
 
     for (param, arg) in zip(params, callArgs)
         evaluatedArg = evaluate(arg)
