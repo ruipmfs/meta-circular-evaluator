@@ -105,7 +105,7 @@ function handleAssociation(expr)
                 push!(function_global_scope[expr.args[1].args[1]], expr.args[1].args[i])
                 i += 1
             end
-            return ("<function>")
+            return evaluate("<function>")
         end
     end
 end
@@ -135,13 +135,25 @@ function handleStandardOperations(symb, args)
         return args[1] > args[2]
     elseif symb == :<
         return args[1] < args[2]
+    elseif symb == :(==)
+        return args[1] == args[2]
+    elseif symb == :!
+        return !args[1]
     end
 end
 
 function handleNonCallExpressions(expr)
     if expr.head == :&&
         args = map(evaluate, expr.args[1:end])
-        return args[1] && args[2]
+        if isa(args[1], Bool) && isa(args[2], Bool)
+            return args[1] && args[2]
+        else
+            if !args[1]
+                return false
+            else
+                return evaluate(args[2])
+            end
+        end
     elseif expr.head == :||
         args = map(evaluate, expr.args[1:end])
         return args[1] || args[2]
@@ -168,15 +180,23 @@ end
 function handleCallFunctions(expr)
     i = 2
     j = 2
-    auxiliar_funcs = []
+    for dict in reverse(temporary_global_scope)
+        if haskey(dict, expr.args[1]) && isa(dict[expr.args[1]], Expr) && dict[expr.args[1]].head == :->
+            args = Tuple(map(evaluate, expr.args[2:end]))
+            toParse = "($(dict[expr.args[1]]))$args"
+            parsed = Meta.parse(toParse)
+            return evaluate(parsed)
+        elseif haskey(dict, expr.args[1]) && haskey(function_global_scope, dict[expr.args[1]])
+            args = Tuple(map(evaluate, expr.args[2:end]))
+            toParse = "($(dict[expr.args[1]]))$args"
+            parsed = Meta.parse(toParse)
+            return evaluate(parsed)
+        end
+    end
     while i <= length(expr.args)
         dict = Dict{Symbol,Any}()
-        if haskey(function_global_scope, expr.args[i])
-            key = function_global_scope[expr.args[1]][i]
+        if haskey(function_global_scope, expr.args[i]) || (isa(expr.args[i], Expr) && expr.args[i].head == :->)
             args = expr.args[i]
-            key_args = function_global_scope[args]
-            push!(auxiliar_funcs, key)
-            function_global_scope[key] = key_args
         else
             args = evaluate(expr.args[i])
         end
@@ -197,8 +217,33 @@ function handleCallFunctions(expr)
             j += 1
         end
     end
-    for key in auxiliar_funcs
-        delete!(function_global_scope, key)
+    return result
+end
+
+function handleAnonymousFunctions(expr)
+    params = expr.args[1].args[1]
+    body = expr.args[1].args[2]
+    j = 1
+
+    if isa(params, Symbol)
+        callArgs = [evaluate(expr.args[2])]
+        params = [params]
+    elseif params.head == :tuple && length(params.args) == 0
+        return evaluate(body)
+    elseif params.head == :tuple
+        callArgs = map(evaluate, expr.args[2:end])
+        params = params.args
+    end
+
+
+    for (param, arg) in zip(params, callArgs)
+        evaluatedArg = evaluate(arg)
+        push!(temporary_global_scope, Dict{Symbol,Any}(param => evaluatedArg))
+    end
+    result = evaluate(body)
+    while j < length(expr.args[1].args)
+        pop!(temporary_global_scope)
+        j += 1
     end
     return result
 end
@@ -215,9 +260,7 @@ function evaluate(expr)
             end
         else
             for dict in reverse(temporary_global_scope)
-                if haskey(dict, expr) && haskey(function_global_scope, expr)
-                    return evaluate(get(function_global_scope, expr, nothing)[1])
-                elseif haskey(dict, expr)
+                if haskey(dict, expr)
                     return evaluate(get(dict, expr, nothing))
                 end
             end
@@ -230,11 +273,20 @@ function evaluate(expr)
     elseif isa(expr, Expr)
         if expr.head == :call
             symb = expr.args[1]
+            for dict in reverse(temporary_global_scope)
+                if haskey(dict, symb) && (haskey(function_global_scope, dict[symb]) || (isa(dict[symb], Expr) && dict[symb].head == :->))
+                    return handleCallFunctions(expr)
+                end
+            end         
             if haskey(function_global_scope, symb) || haskey(let_function_global_scope, symb)
                 return handleCallFunctions(expr)
             else
-                args = map(evaluate, expr.args[2:end])
-                return handleStandardOperations(symb, args)
+                if isa(symb, Expr) && symb.head == :->
+                    return handleAnonymousFunctions(expr)
+                else
+                    args = map(evaluate, expr.args[2:end])
+                    return handleStandardOperations(symb, args)
+                end
             end
         else
             return handleNonCallExpressions(expr)
