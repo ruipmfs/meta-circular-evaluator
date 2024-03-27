@@ -25,22 +25,10 @@ function metajulia_repl()
             parsed = Meta.parse(incomplete_input)
         end
         result = metajulia_eval(parsed)
-        #key_list = keys(function_global_scope)
         if isa(result, String)
             println('"'*"$result"*'"')
         else
-            found_function = false
-            #=for key in key_list
-                if function_global_scope[key][1] == result
-                    found_function = true
-                    break
-                end
-            end=#
-            if found_function
-                println('"'*"<function>"*'"')
-            else
-                println(result)
-            end
+            println(result)
         end
         #=catch e
             println("Error: ", e)
@@ -153,7 +141,7 @@ function handleQuote(expr)
 end
 
 function handleMacro(expr)
-    macro_body = Meta.parse(replace("$(expr.args[2])", "\$" => ""))
+    macro_body = Meta.parse(replace("$(expr.args[2])", "\$" => "")[2:end])
     new_macro = Macro(macro_body, [], [global_scope])
     i=2
     while i <= length(expr.args[1].args)
@@ -161,7 +149,6 @@ function handleMacro(expr)
         i += 1
     end
     function_global_scope[expr.args[1].args[1]] = new_macro
-    #println(new_macro)
     return new_macro
 end
 
@@ -246,7 +233,7 @@ function handleCallFunctions(expr)
     func = function_global_scope[expr.args[1]]
     while i <= length(expr.args)
         dict = Dict{Symbol,Any}()
-        if haskey(function_global_scope, expr.args[i]) || (isa(expr.args[i], Expr) && expr.args[i].head == :->)
+        if haskey(function_global_scope, expr.args[i]) || (haskey(function_global_scope, expr.args[1]) && isa(function_global_scope[expr.args[1]], Macro)) || (isa(expr.args[i], Expr) && expr.args[i].head == :->)
             args = expr.args[i]
         else
             args = metajulia_eval(expr.args[i])
@@ -256,8 +243,14 @@ function handleCallFunctions(expr)
         push!(func.env, dict)
         i += 1
     end
-    for dict in func.env
-        push!(temporary_global_scope, dict)
+    if isa(function_global_scope[expr.args[1]], Macro)
+        for dict in func.env
+            pushfirst!(temporary_global_scope, dict)
+        end
+    else
+        for dict in func.env
+            push!(temporary_global_scope, dict)
+        end
     end
     result = metajulia_eval(expr.args[1])
     while j <= length(expr.args)
