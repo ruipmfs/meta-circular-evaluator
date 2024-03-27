@@ -25,22 +25,10 @@ function metajulia_repl()
             parsed = Meta.parse(incomplete_input)
         end
         result = evaluate(parsed)
-        #key_list = keys(function_global_scope)
         if isa(result, String)
             println('"'*"$result"*'"')
         else
-            found_function = false
-            #=for key in key_list
-                if function_global_scope[key][1] == result
-                    found_function = true
-                    break
-                end
-            end=#
-            if found_function
-                println('"'*"<function>"*'"')
-            else
-                println(result)
-            end
+            println(result)
         end
         #=catch e
             println("Error: ", e)
@@ -59,9 +47,12 @@ mutable struct Function
     env::Array{Dict{Symbol,Any},1}
 end
 
+Base.show(io::IO, f::Function) = print(io, "<function>")
+
 global_scope = Dict{Symbol,Any}()
 let_global_scope = Dict{Symbol,Any}()
 function_global_scope = Dict{Symbol, Function}()
+let_function_global_scope = Dict{Symbol, Function}()
 temporary_global_scope = Array{Dict{Symbol,Any},1}()
 global environmentFlag = 0
 
@@ -100,6 +91,7 @@ function handleLet(expr)
     result = evaluate(expr.args[i])
     environmentFlag = 0
     empty!(let_global_scope)
+    empty!(let_function_global_scope)
     return result
 end
 
@@ -113,12 +105,13 @@ function handleAssociation(expr)
         end
     else
         if environmentFlag == 1
-            function_global_scope[expr.args[1].args[1]] = Function(expr.args[2], [expr.args[1].args[2]], [let_global_scope])
+            let_function_global_scope[expr.args[1].args[1]] = Function(expr.args[2], [expr.args[1].args[2]], [let_global_scope])
             j=3
             while j <= length(expr.args[1].args)
-                push!(function_global_scope[expr.args[1].args[1]].args, expr.args[1].args[j])
+                push!(let_function_global_scope[expr.args[1].args[1]].args, expr.args[1].args[j])
                 j += 1
             end
+            return evaluate(show(let_function_global_scope[expr.args[1].args[1]]))
         else
             function_global_scope[expr.args[1].args[1]] = Function(expr.args[2], [expr.args[1].args[2]], [global_scope])
             j=3
@@ -126,8 +119,8 @@ function handleAssociation(expr)
                 push!(function_global_scope[expr.args[1].args[1]].args, expr.args[1].args[j])
                 j += 1
             end
+            return function_global_scope[expr.args[1].args[1]]
         end
-        return ("<function>")
     end
 end
 
@@ -207,17 +200,21 @@ function handleCallFunctions(expr)
             toParse = "($(dict[expr.args[1]]))$args"
             parsed = Meta.parse(toParse)
             return evaluate(parsed)
-        elseif haskey(dict, expr.args[1]) && haskey(function_global_scope, dict[expr.args[1]])
+        elseif haskey(dict, expr.args[1]) && (haskey(function_global_scope, dict[expr.args[1]]) || haskey(let_function_global_scope, dict[expr.args[1]]))
             args = Tuple(map(evaluate, expr.args[2:end]))
             toParse = "($(dict[expr.args[1]]))$args"
             parsed = Meta.parse(toParse)
             return evaluate(parsed)
         end
     end
-    func = function_global_scope[expr.args[1]]
+    if environmentFlag == 1
+        func = let_function_global_scope[expr.args[1]]
+    else
+        func = function_global_scope[expr.args[1]]
+    end
     while i <= length(expr.args)
         dict = Dict{Symbol,Any}()
-        if haskey(function_global_scope, expr.args[i]) || (isa(expr.args[i], Expr) && expr.args[i].head == :->)
+        if haskey(function_global_scope, expr.args[i]) || haskey(let_function_global_scope, expr.args[i]) || (isa(expr.args[i], Expr) && expr.args[i].head == :->)
             args = expr.args[i]
         else
             args = evaluate(expr.args[i])
@@ -233,12 +230,13 @@ function handleCallFunctions(expr)
     result = evaluate(expr.args[1])
     while j <= length(expr.args)
         pop!(func.env)
+        pop!(temporary_global_scope)
         j += 1
     end
     return result
 end
 
-#=function handleAnonymousFunctions(expr)
+function handleAnonymousFunctions(expr)
     params = expr.args[1].args[1]
     body = expr.args[1].args[2]
     j = 1
@@ -263,7 +261,7 @@ end
         j += 1
     end
     return result
-end=#
+end
 
 function evaluate(expr)
     if isa(expr, Number) || isa(expr, String)
@@ -277,8 +275,8 @@ function evaluate(expr)
             end
             if haskey(let_global_scope, expr)
                 return evaluate(get(let_global_scope, expr, nothing))
-            elseif haskey(function_global_scope, expr)
-                return evaluate(get(function_global_scope, expr, nothing).body)
+            elseif haskey(let_function_global_scope, expr)
+                return evaluate(get(let_function_global_scope, expr, nothing).body)
             end
         else
             for dict in reverse(temporary_global_scope)
@@ -296,11 +294,11 @@ function evaluate(expr)
         if expr.head == :call
             symb = expr.args[1]  
             for dict in reverse(temporary_global_scope)
-                if haskey(dict, symb) && (haskey(function_global_scope, dict[symb]) || (isa(dict[symb], Expr) && dict[symb].head == :->))
+                if haskey(dict, symb) && (haskey(function_global_scope, dict[symb]) || haskey(let_function_global_scope, dict[symb]) || (isa(dict[symb], Expr) && dict[symb].head == :->))
                     return handleCallFunctions(expr)
                 end
             end     
-            if haskey(function_global_scope, symb)
+            if haskey(function_global_scope, symb) || haskey(let_function_global_scope, symb)
                 return handleCallFunctions(expr)
             else
                 if isa(symb, Expr) && symb.head == :->
