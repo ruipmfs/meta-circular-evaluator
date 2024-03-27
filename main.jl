@@ -24,7 +24,7 @@ function metajulia_repl()
             end
             parsed = Meta.parse(incomplete_input)
         end
-        result = evaluate(parsed)
+        result = metajulia_eval(parsed)
         #key_list = keys(function_global_scope)
         if isa(result, String)
             println('"'*"$result"*'"')
@@ -59,23 +59,32 @@ mutable struct Function
     env::Array{Dict{Symbol,Any},1}
 end
 
+mutable struct Macro
+    body::Any
+    args::Array{Symbol, 1}
+    env::Array{Dict{Symbol,Any},1}
+end
+
+Base.show(io::IO, f::Function) = print(io, "<function>")
+Base.show(io::IO, f::Macro) = print(io, "<macro>")
+
 global_scope = Dict{Symbol,Any}()
 let_global_scope = Dict{Symbol,Any}()
-function_global_scope = Dict{Symbol, Function}()
+function_global_scope = Dict{Symbol, Any}()
 temporary_global_scope = Array{Dict{Symbol,Any},1}()
 global environmentFlag = 0
 
 function handleIf(expr)  
     i = 1
     while i < length(expr.args)
-        condition = evaluate(expr.args[i])
+        condition = metajulia_eval(expr.args[i])
         if condition
-            return evaluate(expr.args[i+1])
+            return metajulia_eval(expr.args[i+1])
         else
             i += 2
         end
     end
-    return evaluate(expr.args[end])
+    return metajulia_eval(expr.args[end])
 end
 
 function handleComparison(expr)
@@ -85,7 +94,7 @@ function handleComparison(expr)
         new_expr = Expr(:&&, new_expr, Expr(:call, expr.args[i+1], expr.args[i], expr.args[i+2]))
         i += 2
     end
-    args = map(evaluate, new_expr.args[1:end])
+    args = map(metajulia_eval, new_expr.args[1:end])
     return args[1] && args[2]
 end
 
@@ -94,10 +103,10 @@ function handleLet(expr)
     i = 1
     environmentFlag = 1
     while i < length(expr.args)
-        evaluate(expr.args[i])
+        metajulia_eval(expr.args[i])
         i += 1
     end
-    result = evaluate(expr.args[i])
+    result = metajulia_eval(expr.args[i])
     environmentFlag = 0
     empty!(let_global_scope)
     return result
@@ -106,10 +115,10 @@ end
 function handleAssociation(expr)
     if isa(expr.args[1], Symbol)
         if environmentFlag == 1
-            let_global_scope[expr.args[1]] = evaluate(expr.args[2])
+            let_global_scope[expr.args[1]] = metajulia_eval(expr.args[2])
         else
-            global_scope[expr.args[1]] = evaluate(expr.args[2])
-            return evaluate(expr.args[2])
+            global_scope[expr.args[1]] = metajulia_eval(expr.args[2])
+            return metajulia_eval(expr.args[2])
         end
     else
         if environmentFlag == 1
@@ -127,14 +136,14 @@ function handleAssociation(expr)
                 j += 1
             end
         end
-        return ("<function>")
+        return function_global_scope[expr.args[1].args[1]]
     end
 end
 
 function handleQuote(expr)
     if isa(expr, Expr)
         if expr.head == :$
-            return evaluate(expr.args[1])
+            return metajulia_eval(expr.args[1])
         else
             return Expr(expr.head, map(handleQuote, expr.args)...)
         end
@@ -143,11 +152,29 @@ function handleQuote(expr)
     end
 end
 
+function handleMacro(expr)
+    macro_body = Meta.parse(replace("$(expr.args[2])", "\$" => ""))
+    new_macro = Macro(macro_body, [], [global_scope])
+    i=2
+    while i <= length(expr.args[1].args)
+        push!(new_macro.args, expr.args[1].args[i])
+        i += 1
+    end
+    function_global_scope[expr.args[1].args[1]] = new_macro
+    #println(new_macro)
+    return new_macro
+end
+
 function handleStandardOperations(symb, args)
     if symb == :+
         return sum(args)
     elseif symb == :-
-        return foldl(-, args)
+        if length(args) >= 2
+            return foldl(-, args)
+        else
+            push!(args, -1)
+            return prod(args)
+        end
     elseif symb == :*
         return prod(args)
     elseif symb == :/
@@ -165,18 +192,18 @@ end
 
 function handleNonCallExpressions(expr)
     if expr.head == :&&
-        args = map(evaluate, expr.args[1:end])
+        args = map(metajulia_eval, expr.args[1:end])
         if isa(args[1], Bool) && isa(args[2], Bool)
             return args[1] && args[2]
         else
             if !args[1]
                 return false
             else
-                return evaluate(args[2])
+                return metajulia_eval(args[2])
             end
         end
     elseif expr.head == :||
-        args = map(evaluate, expr.args[1:end])
+        args = map(metajulia_eval, expr.args[1:end])
         return args[1] || args[2]
     elseif expr.head == :comparison
         return handleComparison(expr)
@@ -184,7 +211,7 @@ function handleNonCallExpressions(expr)
         return handleIf(expr)
     elseif expr.head == :block
         if length(expr.args) >= 1
-            args = map(evaluate, expr.args[1:end])
+            args = map(metajulia_eval, expr.args[1:end])
             return args[end]
         else
             return
@@ -195,6 +222,8 @@ function handleNonCallExpressions(expr)
         return handleAssociation(expr)
     elseif expr.head == :quote
         return handleQuote(expr.args[1])
+    elseif expr.head == :($=)
+        return handleMacro(expr)
     end
 end
 
@@ -203,15 +232,15 @@ function handleCallFunctions(expr)
     j = 2
     for dict in reverse(temporary_global_scope)
         if haskey(dict, expr.args[1]) && isa(dict[expr.args[1]], Expr) && dict[expr.args[1]].head == :->
-            args = Tuple(map(evaluate, expr.args[2:end]))
+            args = Tuple(map(metajulia_eval, expr.args[2:end]))
             toParse = "($(dict[expr.args[1]]))$args"
             parsed = Meta.parse(toParse)
-            return evaluate(parsed)
+            return metajulia_eval(parsed)
         elseif haskey(dict, expr.args[1]) && haskey(function_global_scope, dict[expr.args[1]])
-            args = Tuple(map(evaluate, expr.args[2:end]))
+            args = Tuple(map(metajulia_eval, expr.args[2:end]))
             toParse = "($(dict[expr.args[1]]))$args"
             parsed = Meta.parse(toParse)
-            return evaluate(parsed)
+            return metajulia_eval(parsed)
         end
     end
     func = function_global_scope[expr.args[1]]
@@ -220,7 +249,7 @@ function handleCallFunctions(expr)
         if haskey(function_global_scope, expr.args[i]) || (isa(expr.args[i], Expr) && expr.args[i].head == :->)
             args = expr.args[i]
         else
-            args = evaluate(expr.args[i])
+            args = metajulia_eval(expr.args[i])
         end
         key = func.args[i-1]
         dict[key] = args
@@ -230,66 +259,67 @@ function handleCallFunctions(expr)
     for dict in func.env
         push!(temporary_global_scope, dict)
     end
-    result = evaluate(expr.args[1])
+    result = metajulia_eval(expr.args[1])
     while j <= length(expr.args)
         pop!(func.env)
+        pop!(temporary_global_scope)
         j += 1
     end
     return result
 end
 
-#=function handleAnonymousFunctions(expr)
+function handleAnonymousFunctions(expr)
     params = expr.args[1].args[1]
     body = expr.args[1].args[2]
     j = 1
 
     if isa(params, Symbol)
-        callArgs = [evaluate(expr.args[2])]
+        callArgs = [metajulia_eval(expr.args[2])]
         params = [params]
     elseif params.head == :tuple && length(params.args) == 0
-        return evaluate(body)
+        return metajulia_eval(body)
     elseif params.head == :tuple
-        callArgs = map(evaluate, expr.args[2:end])
+        callArgs = map(metajulia_eval, expr.args[2:end])
         params = params.args
     end
 
     for (param, arg) in zip(params, callArgs)
-        evaluatedArg = evaluate(arg)
-        push!(temporary_global_scope, Dict{Symbol,Any}(param => evaluatedArg))
+        metajulia_evaldArg = metajulia_eval(arg)
+        push!(temporary_global_scope, Dict{Symbol,Any}(param => metajulia_evaldArg))
     end
-    result = evaluate(body)
+    result = metajulia_eval(body)
     while j < length(expr.args[1].args)
         pop!(temporary_global_scope)
         j += 1
     end
     return result
-end=#
+end
 
-function evaluate(expr)
+function metajulia_eval(expr)
     if isa(expr, Number) || isa(expr, String)
         return expr
     elseif isa(expr, Symbol)
         if environmentFlag == 1
             for dict in reverse(temporary_global_scope)
                 if haskey(dict, expr)
-                    return evaluate(get(dict, expr, nothing))
+                    return metajulia_eval(get(dict, expr, nothing))
                 end
             end
             if haskey(let_global_scope, expr)
-                return evaluate(get(let_global_scope, expr, nothing))
+                return metajulia_eval(get(let_global_scope, expr, nothing))
             elseif haskey(function_global_scope, expr)
-                return evaluate(get(function_global_scope, expr, nothing).body)
+                return metajulia_eval(get(function_global_scope, expr, nothing).body)
             end
         else
             for dict in reverse(temporary_global_scope)
                 if haskey(dict, expr)
-                    return evaluate(get(dict, expr, nothing))
+                    return metajulia_eval(get(dict, expr, nothing))
                 end
             end
             if haskey(global_scope, expr)
-                return evaluate(get(global_scope, expr, nothing))
+                return metajulia_eval(get(global_scope, expr, nothing))
             elseif haskey(function_global_scope, expr)
-                return evaluate(get(function_global_scope, expr, nothing).body)
+                return metajulia_eval(get(function_global_scope, expr, nothing).body)
             end
         end
     elseif isa(expr, Expr)
@@ -306,7 +336,7 @@ function evaluate(expr)
                 if isa(symb, Expr) && symb.head == :->
                     return handleAnonymousFunctions(expr)
                 else
-                    args = map(evaluate, expr.args[2:end])
+                    args = map(metajulia_eval, expr.args[2:end])
                     return handleStandardOperations(symb, args)
                 end
             end

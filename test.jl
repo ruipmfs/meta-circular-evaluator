@@ -455,7 +455,6 @@ end
                     end
                 )) == 10
             end
-
         end
 
         @testset verbose = true "Metaprogramming" begin
