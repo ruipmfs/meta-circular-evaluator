@@ -86,9 +86,7 @@ global isFexpr = 0
 function handleIf(expr)  
     i = 1
     while i < length(expr.args)
-        println(expr)
         condition = metajulia_eval(expr.args[i])
-        println(condition)
         if condition
             return metajulia_eval(expr.args[i+1])
         else
@@ -139,6 +137,7 @@ function handleGlobal(expr)
 end
 
 function handleAssociation(expr)
+    # Handle simple attribuitons
     if isa(expr.args[1], Symbol)
         if environmentFlag == 1
             let_global_scope[expr.args[1]] = metajulia_eval(expr.args[2])
@@ -146,16 +145,17 @@ function handleAssociation(expr)
             global_scope[expr.args[1]] = metajulia_eval(expr.args[2])
         end
         result = metajulia_eval(expr.args[2])
+        # Handle Anonymous functions
         if isa(result, Function)
             delete!(global_scope, expr.args[1])
             function_global_scope[expr.args[1]] = result
-            # Handle Anonymous functions
             if haskey(function_global_scope, Symbol("anonymous"))
                 delete!(function_global_scope, Symbol("anonymous"))
             end
         end
         return result
     else
+        # Handle function creation
         if environmentFlag == 1
             let_function_global_scope[expr.args[1].args[1]] = Function(expr.args[2], [], [let_global_scope])
             j=2
@@ -258,6 +258,7 @@ function handleNonCallExpressions(expr)
         args = map(metajulia_eval, expr.args[1:end])
         if isa(args[1], Bool) && isa(args[2], Bool)
             return args[1] && args[2]
+        # Handle short-circuit evaluation
         else
             if !args[1]
                 return false
@@ -299,12 +300,15 @@ end
 function handleCallFunctions(expr)
     i = 2
     j = 2
+    # Handle call of an Anonymous function
     if (isa(expr.args[1], Expr) && expr.args[1].head == :->)
         handleAnonymousFunctions(expr.args[1])
         callArg = Symbol("anonymous")
     else
+        # Function name
         callArg = expr.args[1]
     end
+    # Handle invocation of a function that is given as an argument to a main function
     for dict in reverse(temporary_global_scope)
         if haskey(dict, callArg) && isa(dict[callArg], Expr) && dict[callArg].head == :->
             args = Tuple(map(metajulia_eval, expr.args[2:end]))
@@ -333,6 +337,7 @@ function handleCallFunctions(expr)
     end
     while i <= length(expr.args)
         dict = Dict{Symbol,Any}()
+        # Handle function that is given as an argument to a main function
         if haskey(function_global_scope, expr.args[i]) || haskey(let_function_global_scope, expr.args[i]) ||
             (haskey(function_global_scope, callArg) && isa(function_global_scope[callArg], Macro)) || 
             (haskey(let_function_global_scope, callArg) && isa(let_function_global_scope[callArg], Macro)) || 
@@ -341,11 +346,13 @@ function handleCallFunctions(expr)
         else
             args = metajulia_eval(expr.args[i])
         end
+        # Store function environment 
         key = func.args[i-1]
         dict[key] = args
         push!(func.env, dict)
         i += 1
     end
+    # Handle temporary dictionary of a macro that is given as an argument to a main function
     if (haskey(function_global_scope, callArg) && isa(function_global_scope[callArg], Macro)) ||
         (haskey(let_function_global_scope, callArg) && isa(let_function_global_scope[callArg], Macro))
         for dict in func.env
@@ -357,11 +364,13 @@ function handleCallFunctions(expr)
         end
     end
     result = metajulia_eval(callArg)
+    # Delete of temporary arguments from temporary dictionary and function environment
     while j <= length(expr.args)
         pop!(func.env)
         pop!(temporary_global_scope)
         j += 1
     end
+    # Delete of temporary anonymous function
     if callArg == Symbol("anonymous")
         delete!(function_global_scope, callArg)
     end
