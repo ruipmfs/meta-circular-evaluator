@@ -419,7 +419,10 @@ function metajulia_eval(expr)
                 return metajulia_eval(get(let_function_global_scope, expr, nothing).body)
             #elseif haskey(fexpr_global_scope, expr)
             #    global isFexpr = 1
+            #    fexpr_scope = get(fexpr_global_scope, expr, nothing).env
+            #    fexpr_global_scope[expr].env = temporary_global_scope
             #    result = metajulia_eval(get(fexpr_global_scope, expr, nothing).body)
+            #    fexpr_global_scope[expr].env = fexpr_scope
             #    global isFexpr = 0
             #    return result
             end
@@ -439,7 +442,10 @@ function metajulia_eval(expr)
                 return metajulia_eval(get(function_global_scope, expr, nothing).body)
             #elseif haskey(fexpr_global_scope, expr)
             #    global isFexpr = 1
+            #    fexpr_scope = get(fexpr_global_scope, expr, nothing).env
+            #    fexpr_global_scope[expr].env = temporary_global_scope
             #    result = metajulia_eval(get(fexpr_global_scope, expr, nothing).body)
+            #    fexpr_global_scope[expr].env = fexpr_scope
             #    global isFexpr = 0
             #    return result
             end
