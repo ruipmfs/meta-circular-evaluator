@@ -481,6 +481,6 @@ function metajulia_eval(expr)
             return handleNonCallExpressions(expr)
         end
     elseif isa(expr, QuoteNode)
-        return expr
+        return expr.value
     end
 end
