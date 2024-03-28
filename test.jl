@@ -51,28 +51,28 @@ end
     @testset verbose = true "Project Statement Tests" begin
 
         @testset "Basic operations" begin
-            @test evaluate(:(1)) == 1
-            @test evaluate(:("Hello, World!")) == "Hello, World!"
-            @test evaluate(:(1 + 2)) == 3
-            @test evaluate(:((2 + 3) * (4 + 5))) == 45
-            @test evaluate(:(3 > 2)) == true
-            @test evaluate(:(3 < 2)) == false
-            @test evaluate(:(3 > 2 && 3 < 2)) == false
-            @test evaluate(:(3 > 2 || 3 < 2)) == true
-            @test evaluate(:(3 > 2 || 3 < 2)) == true
+            @test metajulia_eval(:(1)) == 1
+            @test metajulia_eval(:("Hello, World!")) == "Hello, World!"
+            @test metajulia_eval(:(1 + 2)) == 3
+            @test metajulia_eval(:((2 + 3) * (4 + 5))) == 45
+            @test metajulia_eval(:(3 > 2)) == true
+            @test metajulia_eval(:(3 < 2)) == false
+            @test metajulia_eval(:(3 > 2 && 3 < 2)) == false
+            @test metajulia_eval(:(3 > 2 || 3 < 2)) == true
+            @test metajulia_eval(:(3 > 2 || 3 < 2)) == true
         end
 
         @testset "Conditional expressions" begin
-            @test evaluate(:(3 > 2 ? 1 : 0)) == 1
-            @test evaluate(:(3 < 2 ? 1 : 0)) == 0
-            @test evaluate(:(
+            @test metajulia_eval(:(3 > 2 ? 1 : 0)) == 1
+            @test metajulia_eval(:(3 < 2 ? 1 : 0)) == 0
+            @test metajulia_eval(:(
                 if 3 > 2
                     1
                 else
                     0
                 end
             )) == 1
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 if 3 < 2
                     1
                 elseif 2 > 3
@@ -84,8 +84,8 @@ end
         end
 
         @testset "Blocks" begin
-            @test evaluate(:((1 + 2; 2 * 3; 3 / 4))) == 0.75
-            @test evaluate(:(
+            @test metajulia_eval(:((1 + 2; 2 * 3; 3 / 4))) == 0.75
+            @test metajulia_eval(:(
                 begin
                     1 + 2
                     2 * 3
@@ -95,24 +95,24 @@ end
         end
 
         @testset "Let form" begin
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 let x = 1
                     x
                 end
             )) == 1
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 let x = 2
                     x * 3
                 end
             )) == 6
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 let a = 1, b = 2
                     let a = 3
                         a + b
                     end
                 end
             )) == 5
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 let a = 1
                     a + 2
                 end
@@ -120,17 +120,17 @@ end
         end
 
         @testset "Let form with functions" begin
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 let x(y) = y + 1
                     x(1)
                 end
             )) == 2
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 let x(y, z) = y + z
                     x(1, 2)
                 end
             )) == 3
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 let x = 1, y(x) = x + 1
                     y(x + 1)
                 end
@@ -138,12 +138,12 @@ end
         end
 
         @testset "Assignments" begin
-            @test evaluate(:(x = 1 + 2)) == 3
-            @test evaluate(:((x = 1 + 2; x + 2))) == 5
-            @test test_show(evaluate(:(triple(a) = a + a + a)), "<function>")
-            @test evaluate(:((x = 1 + 2; triple(a) = a + a + a; triple(x + 3)))) == 18
-            @test evaluate(:((baz = 3))) == 3
-            @test evaluate(:(
+            @test metajulia_eval(:(x = 1 + 2)) == 3
+            @test metajulia_eval(:((x = 1 + 2; x + 2))) == 5
+            @test test_show(metajulia_eval(:(triple(a) = a + a + a)), "<function>")
+            @test metajulia_eval(:((x = 1 + 2; triple(a) = a + a + a; triple(x + 3)))) == 18
+            @test metajulia_eval(:((baz = 3))) == 3
+            @test metajulia_eval(:(
                 begin
                     x = 1 + 2
                     baz = 3
@@ -152,7 +152,7 @@ end
                     end + baz
                 end
             )) == 8
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 begin
                     baz = 3
                     let
@@ -163,8 +163,8 @@ end
         end
 
         @testset "Higher-order functions" begin
-            @test test_show(evaluate(:(sum(f, a, b) = a > b ? 0 : f(a) + sum(f, a + 1, b))), "<function>")
-            @test evaluate(:(
+            @test test_show(metajulia_eval(:(sum(f, a, b) = a > b ? 0 : f(a) + sum(f, a + 1, b))), "<function>")
+            @test metajulia_eval(:(
                 begin
                     triple(a) = a + a + a
                     sum(f, a, b) = a > b ? 0 : f(a) + sum(f, a + 1, b)
@@ -173,23 +173,23 @@ end
         end
 
         @testset "Anonymous functions" begin
-            @test evaluate(:((x -> x + 1)(2))) == 3
-            @test evaluate(:((() -> 5)())) == 5
-            @test evaluate(:(((x, y) -> x + y)(1, 2))) == 3
-            @test evaluate(:(
+            @test metajulia_eval(:((x -> x + 1)(2))) == 3
+            @test metajulia_eval(:((() -> 5)())) == 5
+            @test metajulia_eval(:(((x, y) -> x + y)(1, 2))) == 3
+            @test metajulia_eval(:(
                 begin
                     sum(f, a, b) = a > b ? 0 : f(a) + sum(f, a + 1, b)
                     sum(x -> x * x, 1, 10)
                 end
             )) == 385
-            @test test_show(evaluate(:(
+            @test test_show(metajulia_eval(:(
                     begin
                         incr = let priv_counter = 0
                             () -> priv_counter = priv_counter + 1
                         end
                     end
                 )), "<function>")
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 begin
                     incr = let priv_counter = 0
                         () -> priv_counter = priv_counter + 1
@@ -197,7 +197,7 @@ end
                     incr()
                 end
             )) == 1
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 begin
                     incr = let priv_counter = 0
                         () -> priv_counter = priv_counter + 1
@@ -206,7 +206,7 @@ end
                     incr()
                 end
             )) == 2
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 begin
                     incr = let priv_counter = 0
                         () -> priv_counter = priv_counter + 1
@@ -219,19 +219,19 @@ end
         end
 
         @testset "Global keyword" begin
-            @test test_show(evaluate(:(
+            @test test_show(metajulia_eval(:(
                     let secret = 1234
                         global show_secret() = secret
                     end
                 )), "<function>")
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 begin
                     let secret = 1234
                         global show_secret() = secret
                     end
                     show_secret()
                 end)) == 1234
-            @test test_show(evaluate(:(
+            @test test_show(metajulia_eval(:(
                     begin
                         let priv_balance = 0
                             global deposit = quantity -> priv_balance = priv_balance + quantity
@@ -239,7 +239,7 @@ end
                         end
                     end
                 )), "<function>")
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 begin
                     let priv_balance = 0
                         global deposit = quantity -> priv_balance = priv_balance + quantity
@@ -248,7 +248,7 @@ end
                     deposit(200)
                 end
             )) == 200
-            @test evaluate(:(
+            @test metajulia_eval(:(
                 begin
                     let priv_balance = 0
                         global deposit = quantity -> priv_balance = priv_balance + quantity
@@ -261,29 +261,29 @@ end
         end
 
         @testset "Short-circuit evaluation" begin
-            @test test_show(evaluate(:(quotient_or_false(a, b) = !(b == 0) && a / b)), "<function>")
-            @test evaluate(:((quotient_or_false(a, b) = !(b == 0) && a / b; quotient_or_false(6, 2)))) == 3.0
-            @test evaluate(:((quotient_or_false(a, b) = !(b == 0) && a / b; quotient_or_false(6, 0)))) == false
+            @test test_show(metajulia_eval(:(quotient_or_false(a, b) = !(b == 0) && a / b)), "<function>")
+            @test metajulia_eval(:((quotient_or_false(a, b) = !(b == 0) && a / b; quotient_or_false(6, 2)))) == 3.0
+            @test metajulia_eval(:((quotient_or_false(a, b) = !(b == 0) && a / b; quotient_or_false(6, 0)))) == false
         end
 
         @testset verbose = true "Reflection" begin
 
             @testset "Basic reflection" begin
-                @test evaluate(:(:foo)) == :foo
-                @test evaluate(:(:(foo + bar))) == :(foo + bar)
-                @test evaluate(:(:((1 + 2) * $(1 + 2)))) == :((1 + 2) * 3)
+                @test metajulia_eval(:(:foo)) == :foo
+                @test metajulia_eval(:(:(foo + bar))) == :(foo + bar)
+                @test metajulia_eval(:(:((1 + 2) * $(1 + 2)))) == :((1 + 2) * 3)
             end
 
             @testset "fexpr" begin
-                @test test_show(evaluate(:(identity_function(x) = x)), "<function>")
-                @test evaluate(:((identity_function(x) = x; identity_function(1 + 2)))) == 3
-                @test test_show(evaluate(:(identity_fexpr(x) := x)), "<fexpr>")
-                @test evaluate(:((identity_fexpr(x) := x; identity_fexpr(1 + 2)))) == :(1 + 2)
-                @test evaluate(:((identity_fexpr(x) := x; identity_fexpr(1 + 2) == :(1 + 2)))) == true
+                @test test_show(metajulia_eval(:(identity_function(x) = x)), "<function>")
+                @test metajulia_eval(:((identity_function(x) = x; identity_function(1 + 2)))) == 3
+                @test test_show(metajulia_eval(:(identity_fexpr(x) := x)), "<fexpr>")
+                @test metajulia_eval(:((identity_fexpr(x) := x; identity_fexpr(1 + 2)))) == :(1 + 2)
+                @test metajulia_eval(:((identity_fexpr(x) := x; identity_fexpr(1 + 2) == :(1 + 2)))) == true
             end
 
             @testset "fexpr with eval" begin
-                @test test_show(evaluate(:(
+                @test test_show(metajulia_eval(:(
                         begin
                             debug(expr) := let r = eval(expr)
                                 println(expr, " => ", r)
@@ -292,7 +292,7 @@ end
                         end
                     )), "<fexpr>")
 
-                @test @test_with_stdout(evaluate(:(
+                @test @test_with_stdout(metajulia_eval(:(
                         begin
                             debug(expr) := let r = eval(expr)
                                 println(expr, " => ", r)
@@ -306,7 +306,7 @@ end
             end
 
             @testset "fexpr with eval - scope" begin
-                @test test_show(evaluate(:(
+                @test test_show(metajulia_eval(:(
                         begin
                             let a = 1
                                 global puzzle(x) :=
@@ -317,7 +317,7 @@ end
                         end
                     )), "<fexpr>")
 
-                @test evaluate(:(
+                @test metajulia_eval(:(
                     begin
                         let a = 1
                             global puzzle(x) :=
@@ -331,7 +331,7 @@ end
                     end
                 )) == 10
 
-                @test evaluate(:(
+                @test metajulia_eval(:(
                     begin
                         let a = 1
                             global puzzle(x) :=
@@ -347,12 +347,12 @@ end
             end
 
             @testset "fexpr - when" begin
-                @test test_show(evaluate(:(
+                @test test_show(metajulia_eval(:(
                         begin
                             when(condition, action) := eval(condition) ? eval(action) : false
                         end
                     )), "<fexpr>")
-                @test test_show(evaluate(:(
+                @test test_show(metajulia_eval(:(
                         begin
                             when(condition, action) := eval(condition) ? eval(action) : false
                             show_sign(n) =
@@ -363,7 +363,7 @@ end
                                 end
                         end
                     )), "<function>")
-                @test @test_with_stdout(evaluate(:(
+                @test @test_with_stdout(metajulia_eval(:(
                         begin
                             when(condition, action) := eval(condition) ? eval(action) : false
                             show_sign(n) =
@@ -375,7 +375,7 @@ end
                             show_sign(3)
                         end
                     )), "Positive\n", 3)
-                @test @test_with_stdout(evaluate(:(
+                @test @test_with_stdout(metajulia_eval(:(
                         begin
                             when(condition, action) := eval(condition) ? eval(action) : false
                             show_sign(n) =
@@ -387,7 +387,7 @@ end
                             show_sign(-3)
                         end
                     )), "Negative\n", -3)
-                @test @test_with_stdout(evaluate(:(
+                @test @test_with_stdout(metajulia_eval(:(
                         begin
                             when(condition, action) := eval(condition) ? eval(action) : false
                             show_sign(n) =
@@ -402,7 +402,7 @@ end
             end
 
             @testset "fexpr - repeat_until" begin
-                @test test_show(evaluate(:(
+                @test test_show(metajulia_eval(:(
                         begin
                             repeat_until(condition, action) :=
                                 let
@@ -411,7 +411,7 @@ end
                                 end
                         end
                     )), "<fexpr>")
-                @test @test_with_stdout(evaluate(:(
+                @test @test_with_stdout(metajulia_eval(:(
                         begin
                             repeat_until(condition, action) :=
                                 let
@@ -426,8 +426,8 @@ end
             end
 
             @testset "fexpr - mystery" begin
-                @test test_show(evaluate(:(mystery() := eval)), "<fexpr>")
-                @test test_show(evaluate(:(
+                @test test_show(metajulia_eval(:(mystery() := eval)), "<fexpr>")
+                @test test_show(metajulia_eval(:(
                         begin
                             mystery() := eval
                             let a = 1, b = 2
@@ -435,7 +435,7 @@ end
                             end
                         end
                     )), "<function>")
-                @test test_show(evaluate(:(
+                @test test_show(metajulia_eval(:(
                         begin
                             mystery() := eval
                             let a = 3, b = 4
@@ -443,7 +443,7 @@ end
                             end
                         end
                     )), "<function>")
-                @test evaluate(:(
+                @test metajulia_eval(:(
                     begin
                         mystery() := eval
                         let a = 1, b = 2
@@ -462,20 +462,20 @@ end
         @testset verbose = true "Metaprogramming" begin
 
             @testset "macro" begin
-                @test test_show(evaluate(Meta.parse("when(condition, action) \$= :(\$condition ? \$action : false)")), "<macro>")
+                @test test_show(metajulia_eval(Meta.parse("when(condition, action) \$= :(\$condition ? \$action : false)")), "<macro>")
             end
 
             @testset "macro - abs" begin
-                @test test_show(evaluate(Meta.parse("""begin
+                @test test_show(metajulia_eval(Meta.parse("""begin
                                                              when(condition, action) \$= :(\$condition ? \$action : false)
                                                              abs(x) = (when(x < 0, (x = -x;)); x)
                                                              end""")), "<function>")
-                @test evaluate(Meta.parse("""begin
+                @test metajulia_eval(Meta.parse("""begin
                                                    when(condition, action) \$= :(\$condition ? \$action : false)
                                                    abs(x) = (when(x < 0, (x = -x;)); x)
                                                    abs(-5)
                                                    end""")) == 5
-                @test evaluate(Meta.parse("""begin
+                @test metajulia_eval(Meta.parse("""begin
                                                    when(condition, action) \$= :(\$condition ? \$action : false)
                                                    abs(x) = (when(x < 0, (x = -x;)); x)
                                                    abs(5)
@@ -485,14 +485,14 @@ end
 
             @testset "macro - repeat_until" begin
 
-                @test test_show(evaluate(Meta.parse("""begin
+                @test test_show(metajulia_eval(Meta.parse("""begin
                                                              repeat_until(condition, action) \$=
                                                                 :(let ;
                                                                     loop() = (\$action; \$condition ? false : loop())
                                                                     loop()
                                                                 end)
                                                              end""")), "<macro>")
-                @test @test_with_stdout(evaluate(Meta.parse("""begin
+                @test @test_with_stdout(metajulia_eval(Meta.parse("""begin
                                                                         repeat_until(condition, action) \$=
                                                                             :(let ;
                                                                                 loop() = (\$action; \$condition ? false : loop())
@@ -502,7 +502,7 @@ end
                                                                             repeat_until(n == 0, (println(n); n = n - 1))
                                                                         end
                                                                      end""")), "4\n3\n2\n1\n", false)
-                @test @test_with_stdout(evaluate(Meta.parse("""begin
+                @test @test_with_stdout(metajulia_eval(Meta.parse("""begin
                                                                      repeat_until(condition, action) \$=
                                                                         :(let ;
                                                                             loop() = (\$action; \$condition ? false : loop())
@@ -515,7 +515,7 @@ end
             end
 
             @testset "macro - repeat_until with gensym" begin
-                @test test_show(evaluate(Meta.parse("""begin
+                @test test_show(metajulia_eval(Meta.parse("""begin
                                                              repeat_until(condition, action) \$=
                                                              let loop = gensym()
                                                                :(let ;
@@ -524,7 +524,7 @@ end
                                                                 end)
                                                               end
                                                               end""")), "<macro>")
-                @test @test_with_stdout(evaluate(Meta.parse("""begin
+                @test @test_with_stdout(metajulia_eval(Meta.parse("""begin
                                                                      repeat_until(condition, action) \$=
                                                                      let loop = gensym()
                                                                         :(let ;
@@ -545,7 +545,7 @@ end
 
     @testset "Extra Tests" begin
 
-        @test evaluate(:(
+        @test metajulia_eval(:(
             begin
                 a = 1
                 let a = 2, b = a
