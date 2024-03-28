@@ -1,4 +1,4 @@
-
+include("main.jl")
 import Test.@testset
 import Test.@test
 
